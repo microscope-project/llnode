@@ -56,6 +56,7 @@ if (osName === 'Darwin') {
     fs.writeFileSync('options.gypi', '{}', 'utf-8');
   } else {
     lldbInstallDir = installedDir;
+    setLinuxBuildDir();
   }
 } else if (osName === 'FreeBSD') {
   lldbExe = getLldbExecutable();
@@ -119,6 +120,26 @@ fs.symlinkSync(lldbInstallDir, 'lldb');
 var gypSubDir = 'node-gyp';
 if (process.env.npm_config_global) {
   gypSubDir = 'npm/node_modules/node-gyp';
+}
+
+function setLinuxBuildDir() {
+  const libStat = getLinuxLib(lldbVersion);
+  if (!libStat) {
+    console.log('Could not locate the liblldb.so,' +
+       ' addon build may fail');
+  } else {
+    const config = JSON.stringify({
+      variables: {
+        "lldb_build_dir%": libStat.buildDir,
+        "lldb_lib%": libStat.lib
+      }
+    }, null, 2);
+    const soPath = `${libStat.buildDir}/lib/lib${libStat.lib}.so`;
+    console.log(`The addon will be linked to ${soPath}`);
+    console.log('Writing config to options.gypi...');
+    console.log(config);
+    fs.writeFileSync('options.gypi', config, 'utf-8');
+  }
 }
 
 // npm can be in a different location than the current
@@ -195,7 +216,9 @@ function setDarwinBuildDir() {
     '--prefix'
   ]).toString().trim();
   const options = JSON.stringify({
-    variables: { 'lldb_build_dir%': prefix }
+    variables: {
+      'lldb_build_dir%': prefix
+    }
   }, null, 2);
   fs.writeFileSync('options.gypi', options, 'utf-8');
   console.log('Overwriting options.gypi with output from llvm-config:');
@@ -309,6 +332,35 @@ function getLinuxInstallDir(version) {
   if (fs.existsSync('/usr/include/lldb')) {
     return '/usr';
   }
+  return undefined;
+}
+function getLinuxLib(version) {
+  // Get the directory which should contain the shared library and
+  // check if they are present.
+  console.log('Checking for shared libraries, version is ' + version);
+  try {
+    const libDir = child_process.execFileSync('llvm-config-' + version,
+      ['--libdir']).toString().trim();
+    const soPath = path.join(libDir, `liblldb-${version}.so`);
+    const stat = fs.lstatSync(soPath);
+    if (stat.isFile() || stat.isSymbolicLink()) {
+      return {
+        buildDir: path.dirname(libDir),
+        lib: `lldb-${version}`
+      };
+    }
+  } catch (err) {
+    console.log(err);
+    // Return undefined, we will download the headers.
+  }
+  // On Redhat lib are just installed in /usr/lib
+  if (fs.existsSync('/usr/lib/lldblldb.so')) {
+    return {
+      buildDir: '/usr',
+      lib: 'lldb'
+    }
+  }
+
   return undefined;
 }
 
