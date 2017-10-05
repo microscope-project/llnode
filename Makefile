@@ -5,7 +5,7 @@ all:
 	@echo "Please take a look at README.md"
 
 .PHONY: install-osx
-install-osx:
+install-osx: plugin
 	mkdir -p ~/Library/Application\ Support/LLDB/PlugIns/
 	cp -rf ./out/Release/llnode.dylib \
 		~/Library/Application\ Support/LLDB/PlugIns/
@@ -15,7 +15,7 @@ uninstall-osx:
 	rm ~/Library/Application\ Support/LLDB/PlugIns/llnode.dylib
 
 .PHONY: install-linux
-install-linux:
+install-linux: plugin
 	mkdir -p /usr/lib/lldb/plugins
 	cp -rf ./out/Release/lib.target/llnode.so /usr/lib/lldb/plugins
 
@@ -38,6 +38,11 @@ plugin: configure
 	$(MAKE) -C out/
 	node scripts/cleanup.js
 
+.PHONY: addon
+addon:
+	node scripts/configure.js
+	node-gyp rebuild
+
 .PHONY: _travis
 _travis:
 	TEST_LLDB_BINARY="$(TEST_LLDB_BINARY)" \
@@ -48,6 +53,7 @@ _travis:
 .PHONY: clean
 clean:
 	$(RM) -r out
+	$(RM) -r build
 	$(RM) options.gypi
 	$(RM) lldb
-	$(RM) llnode.so llnode.dylib
+	$(RM) addon.node llnode.so llnode.dylib
