@@ -121,6 +121,26 @@ if (process.env.npm_config_global) {
   gypSubDir = 'npm/node_modules/node-gyp';
 }
 
+if (osName === 'Linux') {
+  const libStat = getLinuxLib(lldbVersion);
+  if (!libStat) {
+    console.log('Could not locate the liblldb.so,' +
+                ' addon build may fail');
+  } else {
+    const config = `{
+  "variables": {
+    "lldb_lib_dir%": "${libStat.buildDir}",
+    "lldb_lib%": "${libStat.lib}"
+  }
+}`;
+    const soPath = `${libStat.buildDir}/lib/lib${libStat.lib}.so`;
+    console.log(`The addon will be linked to ${soPath}`);
+    console.log('Writing config to config.gypi...');
+    console.log(config);
+    fs.writeFileSync('config.gypi', Buffer.from(config), 'utf-8');
+  }
+}
+
 // npm can be in a different location than the current
 // location for global installs so we need find out where the npm is
 var npmLocation = child_process.execFileSync('which', ['npm']);
@@ -309,6 +329,35 @@ function getLinuxInstallDir(version) {
   if (fs.existsSync('/usr/include/lldb')) {
     return '/usr';
   }
+  return undefined;
+}
+function getLinuxLib(version) {
+  // Get the directory which should contain the shared library and
+  // check if they are present.
+  console.log('Checking for shared libraries, version is ' + version);
+  try {
+    const libDir = child_process.execFileSync('llvm-config-' + version,
+      ['--libdir']).toString().trim();
+    const soPath = path.join(libDir, `liblldb-${version}.so`);
+    const stat = fs.lstatSync(soPath);
+    if (stat.isFile() || stat.isSymbolicLink()) {
+      return {
+        buildDir: path.dirname(libDir),
+        lib: `lldb-${version}`
+      };
+    }
+  } catch (err) {
+    console.log(err);
+    // Return undefined, we will download the headers.
+  }
+  // On Redhat lib are just installed in /usr/lib
+  if (fs.existsSync('/usr/lib/lldblldb.so')) {
+    return {
+      buildDir: '/usr',
+      lib: 'lldb'
+    }
+  }
+
   return undefined;
 }
 

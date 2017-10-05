@@ -2,9 +2,12 @@
 *.dSYM
 tools/
 out/
-lldb/
+lldb
+lldb-*
 build/
 out/
 npm-debug.log
 node_modules/
 options.gypi
+.project
+llnode_module.node
