@@ -12,8 +12,9 @@
 
   "targets": [
     {
-      "target_name": "llnode_module",
+      "target_name": "addon",
       "sources": [
+        "src/addon.cc",
         "src/llnode_module.cc",
         "src/llnode_api.cc",
         "src/llv8.cc",
@@ -134,11 +135,11 @@
     {
       "target_name": "install",
       "type":"none",
-      "dependencies" : [ "llnode_module" ],
+      "dependencies" : [ "addon" ],
       "copies": [
         {
           "destination": "<(module_root_dir)",
-          "files": ["<(module_root_dir)/build/Release/llnode_module.node"]
+          "files": ["<(module_root_dir)/build/Release/addon.node"]
         }]
     },
   ],

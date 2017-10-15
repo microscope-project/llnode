@@ -10,61 +10,55 @@
 #include <lldb/API/SBThread.h>
 #include <lldb/lldb-enumerations.h>
 
-#include "src/llnode.h"
+#include <cstring>
+#include <algorithm>
+
+#include "src/llnode_api.h"
 #include "src/llscan.h"
 #include "src/llv8.h"
-#include "string.h"
 
 namespace llnode {
 
-static bool loaded = false;
-
-static lldb::SBDebugger debugger;
-static lldb::SBTarget target;
-static lldb::SBProcess process;
-
-static LLScan llscan;
-static std::vector<TypeRecord*> object_types;
-
-llnode::v8::LLV8 llv8;
+LLNodeApi::LLNodeApi()
+    : loaded(false),
+      debugger(new lldb::SBDebugger()),
+      target(new lldb::SBTarget()),
+      process(new lldb::SBProcess()),
+      llscan(new LLScan()),
+      v8_(new llnode::v8::LLV8()) {}
+LLNodeApi::~LLNodeApi() = default;
+LLNodeApi::LLNodeApi(LLNodeApi&&) = default;
+LLNodeApi& LLNodeApi::operator=(LLNodeApi&&) = default;
 
 /* Initialize the SB API and load the core dump */
-int initSBTarget(char* filename, char* executable) {
-  if (!loaded) {
-    lldb::SBDebugger::Initialize();
-    debugger = lldb::SBDebugger::Create();
-    loaded = true;
-    // fprintf(stdout,"llnode_api.cc: SB API initialized\n");
-  }
+int LLNodeApi::Init(const char* filename, const char* executable) {
+  lldb::SBDebugger::Initialize();  // TODO: should only be called once?
+
+  *debugger = lldb::SBDebugger::Create();
+  loaded = true;
 
   // Single instance target for now
-  target = debugger.CreateTarget(executable);
-  if (!target.IsValid()) {
-    // fprintf(stdout, "Target created with %s is invalid\n", executable);
+  *target = debugger->CreateTarget(executable);
+  if (!target->IsValid()) {
     return -1;
   }
 
-  process = target.LoadCore(filename);
-
+  *process = target->LoadCore(filename);
   // Load V8 constants from postmortem data
-  llv8.Load(target);
-  // fprintf(stdout,"llnode_api.cc: SB loaded code dump %s\n", filename);
+  v8_->Load(*target);
   return 0;
 }
 
-int getSBProcessInfo(int buffer_size, char* buffer) {
+std::string LLNodeApi::GetProcessInfo() {
   lldb::SBStream info;
-  char* cursor = buffer;
-
-  process.GetDescription(info);
-  cursor += sprintf(cursor, "%s", info.GetData());
-  return 0;
+  process->GetDescription(info);
+  return std::string(info.GetData());
 }
 
-int getSBProcessID() { return process.GetProcessID(); }
+int LLNodeApi::GetProcessID() { return process->GetProcessID(); }
 
-const char* getSBProcessState() {
-  int state = process.GetState();
+std::string LLNodeApi::GetProcessState() {
+  int state = process->GetState();
 
   switch (state) {
     case lldb::StateType::eStateInvalid:
@@ -96,68 +90,73 @@ const char* getSBProcessState() {
   }
 }
 
-int getSBThreadCount() { return process.GetNumThreads(); }
+int LLNodeApi::GetThreadCount() { return process->GetNumThreads(); }
 
-int getSBFrameCount(int threadIndex) {
-  lldb::SBThread thread = process.GetThreadAtIndex(threadIndex);
+int LLNodeApi::GetFrameCount(int thread_index) {
+  lldb::SBThread thread = process->GetThreadAtIndex(thread_index);
   return thread.GetNumFrames();
 }
 
-int getSBFrame(int threadIndex, int frameIndex, int buffer_size, char* buffer) {
-  lldb::SBThread thread = process.GetThreadAtIndex(threadIndex);
-  lldb::SBFrame frame = thread.GetFrameAtIndex(frameIndex);
+std::string LLNodeApi::GetFrame(int thread_index, int frame_index) {
+  lldb::SBThread thread = process->GetThreadAtIndex(thread_index);
+  lldb::SBFrame frame = thread.GetFrameAtIndex(frame_index);
   lldb::SBSymbol symbol = frame.GetSymbol();
 
-  char* cursor = buffer;
+  std::string result;
+  char buf[4096];
   if (symbol.IsValid()) {
-    cursor += sprintf(cursor, "Native: ");
-    cursor += sprintf(cursor, "%s", frame.GetFunctionName());
+    sprintf(buf, "Native: %s", frame.GetFunctionName());
+    result += buf;
+
     lldb::SBModule module = frame.GetModule();
     lldb::SBFileSpec moduleFileSpec = module.GetFileSpec();
-    cursor += sprintf(cursor, " [%s/%s]", moduleFileSpec.GetDirectory(),
-                      moduleFileSpec.GetFilename());
+    sprintf(buf, " [%s/%s]", moduleFileSpec.GetDirectory(),
+            moduleFileSpec.GetFilename());
+    result += buf;
+
     lldb::SBCompileUnit compileUnit = frame.GetCompileUnit();
     lldb::SBFileSpec compileUnitFileSpec = compileUnit.GetFileSpec();
     if (compileUnitFileSpec.GetDirectory() != NULL ||
         compileUnitFileSpec.GetFilename() != NULL) {
-      cursor +=
-          sprintf(cursor, "\n\t [%s: %s]", compileUnitFileSpec.GetDirectory(),
-                  compileUnitFileSpec.GetFilename());
+      sprintf(buf, "\n\t [%s: %s]", compileUnitFileSpec.GetDirectory(),
+              compileUnitFileSpec.GetFilename());
+      result += buf;
     }
   } else {
     // V8 frame
     llnode::v8::Error err;
-    llnode::v8::JSFrame v8_frame(&llv8, static_cast<int64_t>(frame.GetFP()));
-    std::string res = v8_frame.Inspect(true, err);
+    llnode::v8::JSFrame v8_frame(v8_.get(),
+                                 static_cast<int64_t>(frame.GetFP()));
+    std::string frame_str = v8_frame.Inspect(true, err);
 
     // Skip invalid frames
-    // fprintf(stdout,"JS string is [%s]\n",res.c_str());
-    if (err.Fail() || strlen(res.c_str()) == 0 ||
-        strncmp(res.c_str(), "<", 1) == 0) {
-      if (strncmp(res.c_str(), "<", 1) == 0) {
-        cursor += sprintf(cursor, "Unknown: %s", res.c_str());
+    if (err.Fail() || frame_str.length() == 0 || frame_str[0] == '<') {
+      if (frame_str[0] == '<') {
+        sprintf(buf, "Unknown: %s", frame_str.c_str());
+        result += buf;
       } else {
-        cursor += sprintf(cursor, "???");
+        result += "???";
       }
     } else {
       // V8 symbol
-      cursor += sprintf(cursor, "JavaScript: %s", res.c_str());
+      sprintf(buf, "JavaScript: %s", frame_str.c_str());
+      result += buf;
     }
   }
-  return 0;
+  return result;
 }
 
-int getSBTypeCount() {
+int LLNodeApi::GetTypeCount() {
   lldb::SBCommandReturnObject result;
   /* Initial scan to create the JavaScript object map */
-  if (!llscan.ScanHeapForObjects(target, result)) {
+  if (!llscan->ScanHeapForObjects(*target, result)) {
     return 0;
   }
 
   // Load the object types into a vector
-  TypeRecordMap::iterator end = llscan.GetMapsToInstances().end();
+  TypeRecordMap::iterator end = llscan->GetMapsToInstances().end();
   object_types.clear();
-  for (TypeRecordMap::iterator it = llscan.GetMapsToInstances().begin();
+  for (TypeRecordMap::iterator it = llscan->GetMapsToInstances().begin();
        it != end; ++it) {
     object_types.push_back(it->second);
   }
@@ -168,41 +167,37 @@ int getSBTypeCount() {
   return object_types.size();
 }
 
-int getSBTypeName(int typeIndex, int buffer_size, char* buffer) {
-  TypeRecord* type = object_types.at(typeIndex);
-  char* cursor = buffer;
-
-  std::string typeName = type->GetTypeName();
-  cursor += sprintf(cursor, "%s", typeName.c_str());
-  return 0;
+std::string LLNodeApi::GetTypeName(int type_index) {
+  TypeRecord* type = object_types.at(type_index);
+  return type->GetTypeName();
 }
 
-int getSBTypeInstanceCount(int typeIndex) {
-  TypeRecord* type = object_types.at(typeIndex);
+int LLNodeApi::GetTypeInstanceCount(int type_index) {
+  TypeRecord* type = object_types.at(type_index);
   return type->GetInstanceCount();
 }
 
-int getSBTypeTotalSize(int typeIndex) {
-  TypeRecord* type = object_types.at(typeIndex);
+int LLNodeApi::GetTypeTotalSize(int type_index) {
+  TypeRecord* type = object_types.at(type_index);
   return type->GetTotalInstanceSize();
 }
 
-std::set<uint64_t>& getSBTypeInstances(int typeIndex) {
-  TypeRecord* type = object_types.at(typeIndex);
+std::set<uint64_t>& LLNodeApi::GetTypeInstances(int type_index) {
+  TypeRecord* type = object_types.at(type_index);
   return type->GetInstances();
 }
 
-int getSBObject(uint64_t address, int buffer_size, char* buffer) {
-  // fprintf(stderr, "llnode_api.cc getSBObject() called for address %llx\n",
-  //         address);
-  v8::Value v8_value(&llv8, address);
+std::string LLNodeApi::GetObject(uint64_t address) {
+  v8::Value v8_value(v8_.get(), address);
   v8::Value::InspectOptions inspect_options;
   inspect_options.detailed = true;
   inspect_options.length = 16;
 
   v8::Error err;
-  strcpy(buffer, v8_value.Inspect(&inspect_options, err).c_str());
-  // fprintf(stderr, "llnode_api.cc getSBObject() returning %s\n", buffer);
-  return 0;
+  std::string result = v8_value.Inspect(&inspect_options, err);
+  if (err.Fail()) {
+    return "Failed to get object";
+  }
+  return result;
 }
 }  // namespace llnode

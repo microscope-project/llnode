@@ -251,6 +251,7 @@ class LLScan {
   };
 
   v8::LLV8 llv8;
+
  private:
   void ScanMemoryRanges(FindJSObjectsVisitor& v);
   void ClearMemoryRanges();

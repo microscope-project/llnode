@@ -1,3 +1,3 @@
 'use strict';
 
-module.exports = require('bindings')('llnode_module');
+module.exports = require('bindings')('addon');
