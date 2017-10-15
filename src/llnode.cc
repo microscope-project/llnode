@@ -27,7 +27,7 @@ using lldb::SBValue;
 using lldb::eReturnStatusFailed;
 using lldb::eReturnStatusSuccessFinishResult;
 
-v8::LLV8 llv8;
+extern LLScan llscan;
 
 char** CommandBase::ParseInspectOptions(char** cmd,
                                         v8::Value::InspectOptions* options) {
@@ -103,7 +103,7 @@ bool BacktraceCmd::DoExecute(SBDebugger d, char** cmd,
   }
 
   // Load V8 constants from postmortem data
-  llv8.Load(target);
+  llscan.llv8.Load(target);
 
   {
     SBStream desc;
@@ -122,7 +122,7 @@ bool BacktraceCmd::DoExecute(SBDebugger d, char** cmd,
 
     if (!frame.GetSymbol().IsValid()) {
       v8::Error err;
-      v8::JSFrame v8_frame(&llv8, static_cast<int64_t>(frame.GetFP()));
+      v8::JSFrame v8_frame(&llscan.llv8, static_cast<int64_t>(frame.GetFP()));
       std::string res = v8_frame.Inspect(true, err);
       if (err.Success()) {
         result.Printf("  %c frame #%u: 0x%016" PRIx64 " %s\n", star, i, pc,
@@ -194,9 +194,9 @@ bool PrintCmd::DoExecute(SBDebugger d, char** cmd,
   }
 
   // Load V8 constants from postmortem data
-  llv8.Load(target);
+  llscan.llv8.Load(target);
 
-  v8::Value v8_value(&llv8, value.GetValueAsSigned());
+  v8::Value v8_value(&llscan.llv8, value.GetValueAsSigned());
   v8::Error err;
   std::string res = v8_value.Inspect(&inspect_options, err);
   if (err.Fail()) {
@@ -253,7 +253,7 @@ bool ListCmd::DoExecute(SBDebugger d, char** cmd,
   }
 
   // Load V8 constants from postmortem data
-  llv8.Load(target);
+  llscan.llv8.Load(target);
   SBFrame frame = thread.GetSelectedFrame();
   SBSymbol symbol = frame.GetSymbol();
 
@@ -277,7 +277,7 @@ bool ListCmd::DoExecute(SBDebugger d, char** cmd,
 
   // V8 frame
   v8::Error err;
-  v8::JSFrame v8_frame(&llv8, static_cast<int64_t>(frame.GetFP()));
+  v8::JSFrame v8_frame(&llscan.llv8, static_cast<int64_t>(frame.GetFP()));
 
   const static uint32_t kDisplayLines = 4;
   std::string* lines = new std::string[kDisplayLines];
@@ -354,7 +354,7 @@ bool PluginInitialize(SBDebugger d) {
                 "There are scripts for generating this file on Linux and Mac "
                 "in the scripts directory of the llnode repository."
 #endif  // LLDB_SBMemoryRegionInfoList_h_
-  );
+                );
 
   interpreter.AddCommand("findjsobjects", new llnode::FindObjectsCmd(),
                          "Alias for `v8 findjsobjects`");

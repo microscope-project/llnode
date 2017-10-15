@@ -250,6 +250,7 @@ class LLScan {
     return references_by_string_[string_value];
   };
 
+  v8::LLV8 llv8;
  private:
   void ScanMemoryRanges(FindJSObjectsVisitor& v);
   void ClearMemoryRanges();

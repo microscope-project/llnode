@@ -29,10 +29,9 @@ using lldb::eReturnStatusFailed;
 using lldb::eReturnStatusSuccessFinishResult;
 
 // Defined in llnode.cc
-extern v8::LLV8 llv8;
+// extern v8::LLV8 llv8;
 
 LLScan llscan;
-
 
 bool FindObjectsCmd::DoExecute(SBDebugger d, char** cmd,
                                SBCommandReturnObject& result) {
@@ -110,7 +109,7 @@ bool FindInstancesCmd::DoExecute(SBDebugger d, char** cmd,
   std::string type_name = full_cmd;
 
   // Load V8 constants from postmortem data
-  llv8.Load(target);
+  llscan.llv8.Load(target);
 
   TypeRecordMap::iterator instance_it =
       llscan.GetMapsToInstances().find(type_name);
@@ -119,7 +118,7 @@ bool FindInstancesCmd::DoExecute(SBDebugger d, char** cmd,
     for (std::set<uint64_t>::iterator it = t->GetInstances().begin();
          it != t->GetInstances().end(); ++it) {
       v8::Error err;
-      v8::Value v8_value(&llv8, *it);
+      v8::Value v8_value(&llscan.llv8, *it);
       std::string res = v8_value.Inspect(&inspect_options, err);
       result.Printf("%s\n", res.c_str());
     }
@@ -160,7 +159,7 @@ bool NodeInfoCmd::DoExecute(SBDebugger d, char** cmd,
       v8::Error err;
 
       // The properties object should be a JSObject
-      v8::JSObject process_obj(&llv8, *it);
+      v8::JSObject process_obj(&llscan.llv8, *it);
 
 
       v8::Value pid_val = process_obj.GetProperty("pid", err);
@@ -332,7 +331,7 @@ bool FindReferencesCmd::DoExecute(SBDebugger d, char** cmd,
   }
 
   // Load V8 constants from postmortem data
-  llv8.Load(target);
+  llscan.llv8.Load(target);
 
   ObjectScanner* scanner;
 
@@ -352,7 +351,7 @@ bool FindReferencesCmd::DoExecute(SBDebugger d, char** cmd,
         return false;
       }
       // Check the address we've been given at least looks like a valid object.
-      v8::Value search_value(&llv8, value.GetValueAsSigned());
+      v8::Value search_value(&llscan.llv8, value.GetValueAsSigned());
       v8::Smi smi(search_value);
       if (smi.Check()) {
         result.SetError("Search value is an SMI.");
@@ -426,7 +425,7 @@ void FindReferencesCmd::ScanForReferences(ObjectScanner* scanner) {
     TypeRecord* typerecord = entry.second;
     for (uint64_t addr : typerecord->GetInstances()) {
       v8::Error err;
-      v8::Value obj_value(&llv8, addr);
+      v8::Value obj_value(&llscan.llv8, addr);
       v8::HeapObject heap_object(obj_value);
       int64_t type = heap_object.GetType(err);
       v8::LLV8* v8 = heap_object.v8();
@@ -465,7 +464,7 @@ void FindReferencesCmd::PrintReferences(SBCommandReturnObject& result,
   TypeRecordMap mapstoinstances = llscan.GetMapsToInstances();
   for (uint64_t addr : *references) {
     v8::Error err;
-    v8::Value obj_value(&llv8, addr);
+    v8::Value obj_value(&llscan.llv8, addr);
     v8::HeapObject heap_object(obj_value);
     int64_t type = heap_object.GetType(err);
     v8::LLV8* v8 = heap_object.v8();
@@ -1063,13 +1062,13 @@ FindJSObjectsVisitor::FindJSObjectsVisitor(SBTarget& target,
   found_count_ = 0;
   address_byte_size_ = target_.GetProcess().GetAddressByteSize();
   // Load V8 constants from postmortem data
-  llv8.Load(target);
+  llscan.llv8.Load(target);
 }
 
 
 /* Visit every address, a bit brute force but it works. */
 uint64_t FindJSObjectsVisitor::Visit(uint64_t location, uint64_t word) {
-  v8::Value v8_value(&llv8, word);
+  v8::Value v8_value(&llscan.llv8, word);
 
   v8::Error err;
   // Test if this is SMI
