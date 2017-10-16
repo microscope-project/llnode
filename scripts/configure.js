@@ -56,6 +56,7 @@ if (osName === 'Darwin') {
     fs.writeFileSync('options.gypi', '{}', 'utf-8');
   } else {
     lldbInstallDir = installedDir;
+    setLinuxBuildDir();
   }
 } else if (osName === 'FreeBSD') {
   lldbExe = getLldbExecutable();
@@ -121,23 +122,23 @@ if (process.env.npm_config_global) {
   gypSubDir = 'npm/node_modules/node-gyp';
 }
 
-if (osName === 'Linux') {
+function setLinuxBuildDir() {
   const libStat = getLinuxLib(lldbVersion);
   if (!libStat) {
     console.log('Could not locate the liblldb.so,' +
-                ' addon build may fail');
+       ' addon build may fail');
   } else {
-    const config = `{
-  "variables": {
-    "lldb_lib_dir%": "${libStat.buildDir}",
-    "lldb_lib%": "${libStat.lib}"
-  }
-}`;
+    const config = JSON.stringify({
+      variables: {
+        "lldb_build_dir%": libStat.buildDir,
+        "lldb_lib%": libStat.lib
+      }
+    }, null, 2);
     const soPath = `${libStat.buildDir}/lib/lib${libStat.lib}.so`;
     console.log(`The addon will be linked to ${soPath}`);
-    console.log('Writing config to config.gypi...');
+    console.log('Writing config to options.gypi...');
     console.log(config);
-    fs.writeFileSync('config.gypi', Buffer.from(config), 'utf-8');
+    fs.writeFileSync('options.gypi', config, 'utf-8');
   }
 }
 
@@ -215,7 +216,9 @@ function setDarwinBuildDir() {
     '--prefix'
   ]).toString().trim();
   const options = JSON.stringify({
-    variables: { 'lldb_build_dir%': prefix }
+    variables: {
+      'lldb_build_dir%': prefix
+    }
   }, null, 2);
   fs.writeFileSync('options.gypi', options, 'utf-8');
   console.log('Overwriting options.gypi with output from llvm-config:');

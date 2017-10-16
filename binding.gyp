@@ -1,32 +1,32 @@
 {
   "includes": [
     "common.gypi",
-    "config.gypi"
+    "options.gypi"
   ],
 
   "variables": {
-      # gyp does not appear to let you test for undefined variables, so define
-      # lldb_build_dir as empty so we can test it later.
-      "lldb_build_dir%": ""
+    # gyp does not appear to let you test for undefined variables, so define
+    # lldb_build_dir as empty so we can test it later.
+    # this variable is used when we don't link with frameworks on Macos
+    "lldb_build_dir%": ""
   },
 
-  "targets": [
-    {
-      "target_name": "addon",
-      "sources": [
-        "src/addon.cc",
-        "src/llnode_module.cc",
-        "src/llnode_api.cc",
-        "src/llv8.cc",
-        "src/llv8-constants.cc",
-        "src/llscan.cc"
-      ],
-      "include_dirs": [
-        ".",
-        "<(lldb_dir)/include",
-        "<!(node -e \"require('nan')\")"
-      ],
-      "conditions": [
+  "targets": [{
+    "target_name": "addon",
+    "sources": [
+      "src/addon.cc",
+      "src/llnode_module.cc",
+      "src/llnode_api.cc",
+      "src/llv8.cc",
+      "src/llv8-constants.cc",
+      "src/llscan.cc"
+    ],
+    "include_dirs": [
+      ".",
+      "<(lldb_dir)/include",
+      "<!(node -e \"require('nan')\")"
+    ],
+    "conditions": [
       [ "OS == 'mac'", {
         "conditions": [
           [ "lldb_build_dir == ''", {
@@ -36,8 +36,8 @@
             "xcode_settings": {
               "OTHER_LDFLAGS": [
                 "-F<(mac_shared_frameworks)",
-                "-Wl,-rpath,<(mac_shared_frameworks)",
-                "-framework LLDB",
+              "-Wl,-rpath,<(mac_shared_frameworks)",
+              "-framework LLDB",
               ],
             },
           },
@@ -56,11 +56,11 @@
       [ "OS=='linux'", {
         "conditions": [
           [ "lldb_build_dir == ''", {
-            "libraries": ["<(lldb_lib_dir)/lib/liblldb.so.1" ],
+            "libraries": ["<(lldb_dir)/lib/liblldb.so.1" ],
             "ldflags": [
-              "-Wl,-rpath,<(lldb_lib_dir)/lib",
-              "-L<(lldb_lib_dir)/lib",
-              "-l<(lldb_lib)"
+              "-Wl,-rpath,<(lldb_dir)/lib",
+              "-L<(lldb_dir)/lib",
+              "-l<(lldb_lib)",
             ]
           },
           # lldb_builddir != ""
@@ -69,79 +69,24 @@
             "ldflags": [
               "-Wl,-rpath,<(lldb_build_dir)/lib",
               "-L<(lldb_build_dir)/lib",
-              "-l<(lldb_lib)"
+              "-l<(lldb_lib)",
             ]
-          }]
-        ]
-      }]
-    ],
-      # "conditions": [
-      #   ["OS=='mac'", {
-      #     "make_global_settings": [
-      #       ["CXX","/usr/bin/clang++"],
-      #       ["LINK","/usr/bin/clang++"],
-      #     ],
-      #     "xcode_settings": {
-      #       "OTHER_CPLUSPLUSFLAGS" : ["-stdlib=libc++"],
-      #      },
-      #      # cflags as recommended by 'llvm-config --cxxflags'
-      #      "cflags": [
-      #        "--enable-cxx11",
-      #        "--enable-libcpp",
-      #        "-std=c++11",
-      #        "-stdlib=libc++",
-      #        "-I/usr/local/opt/llvm36/lib/llvm-3.6/include",
-      #        "-DNDEBUG -D_GNU_SOURCE",
-      #        "-D__STDC_CONSTANT_MACROS",
-      #        "-D__STDC_FORMAT_MACROS",
-      #        "-D__STDC_LIMIT_MACROS"
-      #        "-g",
-      #        "-O2",
-      #        "-fomit-frame-pointer"
-      #        "-fvisibility-inlines-hidden",
-      #        "-fno-exceptions",
-      #        "-fPIC",
-      #        "-ffunction-sections",
-      #        "-fdata-sections",
-      #        "-Wcast-qual",
-      #       ],
-      #      # ldflags as recommended by 'llvm-config --ldflags'
-      #      "ldflags": [ "-L/usr/local/opt/llvm36/lib/llvm-3.6/lib -llldb-3.6", ],
-      #   }],
-      #   ["OS=='linux'", {
-      #     "libraries": ["/usr/lib/llvm-3.9/lib/liblldb.so.1" ],
-      #      # cflags as recommended by 'llvm-config --cxxflags'
-      #      "cflags": [
-      #        "-I/usr/lib/llvm-3.9/include",
-      #        "-DNDEBUG -D_GNU_SOURCE",
-      #        "-D__STDC_CONSTANT_MACROS",
-      #        "-D__STDC_FORMAT_MACROS",
-      #        "-D__STDC_LIMIT_MACROS",
-      #        "-g",
-      #        "-O2",
-      #        "-fomit-frame-pointer",
-      #        "-fvisibility-inlines-hidden",
-      #        "-fno-exceptions",
-      #        "-fPIC",
-      #        "-ffunction-sections",
-      #        "-fdata-sections",
-      #        "-Wcast-qual",
-      #       ],
-      #      # ldflags as recommended by 'llvm-config --ldflags'
-      #      "ldflags": [ "-L/usr/lib/llvm-3.9/lib -llldb-3.9", ],
-      #   }],
-      # ],
-    },
+          }
+        ],
+      ]
+     }]
+    ]
+  },
+  {
+    "target_name": "install",
+    "type":"none",
+    "dependencies" : [ "addon" ],
+    "copies": [
     {
-      "target_name": "install",
-      "type":"none",
-      "dependencies" : [ "addon" ],
-      "copies": [
-        {
-          "destination": "<(module_root_dir)",
-          "files": ["<(module_root_dir)/build/Release/addon.node"]
-        }]
-    },
+      "destination": "<(module_root_dir)",
+      "files": ["<(module_root_dir)/build/Release/addon.node"]
+    }]
+  },
   ],
 }
 

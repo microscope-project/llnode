@@ -2,6 +2,7 @@
   "variables": {
       # gyp does not appear to let you test for undefined variables, so define
       # lldb_build_dir as empty so we can test it later.
+      # this variable is used when we don't link with frameworks on Macos
       "lldb_build_dir%": ""
   },
 
