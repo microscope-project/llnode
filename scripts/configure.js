@@ -340,7 +340,7 @@ function getLinuxLib(version) {
   console.log('Checking for shared libraries, version is ' + version);
   try {
     const libDir = child_process.execFileSync('llvm-config-' + version,
-      ['--libdir']).toString().trim();
+        ['--libdir']).toString().trim();
     const soPath = path.join(libDir, `liblldb-${version}.so`);
     const stat = fs.lstatSync(soPath);
     if (stat.isFile() || stat.isSymbolicLink()) {
@@ -353,7 +353,7 @@ function getLinuxLib(version) {
     console.log(err);
     // Return undefined, we will download the headers.
   }
-  // On Redhat lib are just installed in /usr/lib
+  // On Redhat libs are just installed in /usr/lib
   if (fs.existsSync('/usr/lib/lldblldb.so')) {
     return {
       buildDir: '/usr',

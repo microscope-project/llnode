@@ -13,6 +13,7 @@
 
   "targets": [{
     "target_name": "addon",
+    "type": "loadable_module",
     "sources": [
       "src/addon.cc",
       "src/llnode_module.cc",
@@ -26,8 +27,12 @@
       "<(lldb_dir)/include",
       "<!(node -e \"require('nan')\")"
     ],
+    "cflags" : [ "-std=c++11" ],
     "conditions": [
       [ "OS == 'mac'", {
+        "xcode_settings": {
+          "OTHER_CPLUSPLUSFLAGS" : [ "-std=c++11", "-stdlib=libc++" ],
+        },
         "conditions": [
           [ "lldb_build_dir == ''", {
             "variables": {
@@ -36,8 +41,8 @@
             "xcode_settings": {
               "OTHER_LDFLAGS": [
                 "-F<(mac_shared_frameworks)",
-              "-Wl,-rpath,<(mac_shared_frameworks)",
-              "-framework LLDB",
+                "-Wl,-rpath,<(mac_shared_frameworks)",
+                "-framework LLDB",
               ],
             },
           },
