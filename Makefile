@@ -39,8 +39,7 @@ plugin: configure
 	node scripts/cleanup.js
 
 .PHONY: addon
-addon:
-	node scripts/configure.js
+addon: configure
 	node-gyp rebuild
 
 .PHONY: _travis
@@ -49,6 +48,14 @@ _travis:
 	TEST_LLNODE_DEBUG=true \
 	LLNODE_DEBUG=true \
 	npm test
+
+# `configure` is run during preinstall.
+# This is run by `npm install`.
+.PHONY: npm-build
+npm-build:
+	./gyp_llnode
+	$(MAKE) -C out/
+	node-gyp rebuild
 
 .PHONY: clean
 clean:
