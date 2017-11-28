@@ -8,7 +8,7 @@ const spawn = require('child_process').spawn;
 const EventEmitter = require('events').EventEmitter;
 
 exports.fixturesDir = path.join(__dirname, 'fixtures');
-exports.buildDir = path.join(__dirname, '..', 'out', 'Release');
+exports.projectDir = path.join(__dirname, '..');
 
 exports.core = path.join(os.tmpdir(), 'core');
 
@@ -25,9 +25,9 @@ if (process.platform === 'darwin')
 else if (process.platform === 'windows')
   pluginName = 'llnode.dll';
 else
-  pluginName = path.join('lib.target', 'llnode.so');
+  pluginName = 'llnode.so';
 
-exports.llnodePath = path.join(exports.buildDir, pluginName);
+exports.llnodePath = path.join(exports.projectDir, pluginName);
 exports.saveCoreTimeout = 180 * 1000;
 exports.loadCoreTimeout = 20 * 1000;
 
@@ -210,13 +210,17 @@ Session.prototype.waitCoreLoad = function waitCoreLoad(callback) {
 };
 
 Session.prototype.kill = function kill() {
-  this.lldb.kill();
-  this.lldb = null;
+  // if a 'quit' has been sent to lldb, killing it could result in ECONNRESET
+  if (this.lldb.channel) {
+    debug('kill lldb');
+    this.lldb.kill();
+    this.lldb = null;
+  }
 };
 
 Session.prototype.quit = function quit() {
   if (this.needToKill) {
-    this.send('kill');
+    this.send('kill'); // kill the process launched in lldb
   }
   this.send('quit');
 };
