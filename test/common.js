@@ -17,7 +17,7 @@ function llnodeDebug(...args) {
 }
 
 const debug = exports.debug =
-  process.env.LLNODE_DEBUG ? llnodeDebug : () => { };
+  process.env.TEST_LLNODE_DEBUG ? llnodeDebug : () => { };
 
 let pluginName;
 if (process.platform === 'darwin')
