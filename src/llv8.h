@@ -1,6 +1,7 @@
 #ifndef SRC_LLV8_H_
 #define SRC_LLV8_H_
 
+#include <cstring>
 #include <string>
 
 #include <lldb/API/LLDB.h>
@@ -20,20 +21,24 @@ class CodeMap;
 
 class Error {
  public:
-  Error() : failed_(false), msg_(nullptr) {}
-  Error(bool failed, const char* msg) : failed_(failed), msg_(msg) {}
+  Error() : failed_(false), msg_("") {}
+  Error(bool failed, std::string msg) : failed_(failed), msg_(msg) {}
+  Error(bool failed, const char* format, ...);
 
   static inline Error Ok() { return Error(false, "ok"); }
-  static inline Error Failure(const char* msg) { return Error(true, msg); }
+  static Error Failure(std::string msg);
+  static Error Failure(const char* format, ...);
+  static void PrintInDebugMode(const char* format, ...);
 
   inline bool Success() const { return !Fail(); }
   inline bool Fail() const { return failed_; }
 
-  inline const char* GetMessage() { return msg_; }
+  inline const char* GetMessage() { return msg_.c_str(); }
 
  private:
   bool failed_;
-  const char* msg_;
+  std::string msg_;
+  static const size_t MSG_BUF_LENGTH = 128;
 };
 
 #define V8_VALUE_DEFAULT_METHODS(NAME, PARENT)     \
@@ -41,7 +46,8 @@ class Error {
   NAME() : PARENT() {}                             \
   NAME(LLV8* v8, int64_t raw) : PARENT(v8, raw) {} \
   NAME(Value& v) : PARENT(v) {}                    \
-  NAME(Value* v) : PARENT(v->v8(), v->raw()) {}
+  NAME(Value* v) : PARENT(v->v8(), v->raw()) {}    \
+  static inline const char* ClassName() { return #NAME; }
 
 class Value {
  public:
@@ -77,6 +83,8 @@ class Value {
   std::string Inspect(InspectOptions* options, Error& err);
   std::string GetTypeName(Error& err);
   std::string ToString(Error& err);
+
+  static inline const char* ClassName() { return "Value"; }
 
  protected:
   LLV8* v8_;
@@ -464,7 +472,7 @@ class LLV8 {
   int64_t LoadPtr(int64_t addr, Error& err);
   int64_t LoadUnsigned(int64_t addr, uint32_t byte_size, Error& err);
   double LoadDouble(int64_t addr, Error& err);
-  std::string LoadBytes(int64_t length, int64_t addr, Error& err);
+  std::string LoadBytes(int64_t addr, int64_t length, Error& err);
   std::string LoadString(int64_t addr, int64_t length, Error& err);
   std::string LoadTwoByteString(int64_t addr, int64_t length, Error& err);
   uint8_t* LoadChunk(int64_t addr, int64_t length, Error& err);
