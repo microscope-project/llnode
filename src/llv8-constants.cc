@@ -15,6 +15,7 @@ namespace constants {
 
 using lldb::SBAddress;
 using lldb::SBError;
+using lldb::SBFileSpec;
 using lldb::SBProcess;
 using lldb::SBSymbol;
 using lldb::SBSymbolContext;
@@ -30,23 +31,51 @@ void Module::Assign(SBTarget target, Common* common) {
   common_ = common;
 }
 
+uint64_t BufToUint64(const uint8_t* buf, uint32_t size) {
+  uint64_t res = 0;
+  // printf("buf: ");
+  for (size_t i = 0; i < size; i++) {
+    uint8_t bit_shifts = i * 8;
+    res |= (uint64_t)buf[i] << bit_shifts;
+    // printf("%02x ", buf[i]);
+  }
+  // printf("\n");
+  return res;
+}
+
+int64_t ReadSymbolFromTarget(SBTarget& target, SBAddress& start, uint32_t size,
+                             Error& err) {
+  SBError sberr;
+  int64_t res = 0;
+  uint8_t* buf = new uint8_t[size];
+  target.ReadMemory(start, buf, static_cast<size_t>(size), sberr);
+  if (!sberr.Fail()) {
+    res = BufToUint64(buf, size);
+    err = Error::Ok();
+  } else {
+    err = Error::Failure("Failed to read memory from target: %s",
+                         sberr.GetCString());
+  }
+  delete[] buf;
+  return res;
+}
 
 static int64_t LookupConstant(SBTarget target, const char* name, int64_t def,
                               Error& err) {
-  int64_t res;
-
+  int64_t res = 0;
   res = def;
 
   SBSymbolContextList context_list = target.FindSymbols(name);
+
   if (!context_list.IsValid() || context_list.GetSize() == 0) {
-    err = Error::Failure("Failed to find symbol %s", name);
+    err = Error::Failure("Failed to find symbol %s from target", name);
     return res;
   }
 
   SBSymbolContext context = context_list.GetContextAtIndex(0);
   SBSymbol symbol = context.GetSymbol();
   if (!symbol.IsValid()) {
-    err = Error::Failure("Failed to fetch symbol %s", name);
+    err = Error::Failure("Failed to fetch symbol %s from context", name);
     return res;
   }
 
@@ -54,34 +83,30 @@ static int64_t LookupConstant(SBTarget target, const char* name, int64_t def,
   SBAddress end = symbol.GetEndAddress();
   uint32_t size = end.GetOffset() - start.GetOffset();
 
-  SBError sberr;
+  // SBFileSpec file = start.GetModule().GetFileSpec();
+  // Error::PrintInDebugMode(
+  //     "Trying to read symbol %s(size=%" PRIu32 ") from %s at 0x%016" PRIx64,
+  //     name, size, file.GetFilename(), start.GetFileAddress());
 
-  SBProcess process = target.GetProcess();
-  addr_t addr = start.GetFileAddress();
-
-  // NOTE: size could be bigger for at the end symbols
   if (size >= 8) {
-    res = process.ReadUnsignedFromMemory(addr, 8, sberr);
+    Error::PrintInDebugMode("Size of symbol %s was %" PRIu32 ", adjust to 8",
+                            name, size);
+    res = ReadSymbolFromTarget(target, start, 8, err);
   } else if (size == 4) {
-    int32_t tmp = process.ReadUnsignedFromMemory(addr, size, sberr);
+    int32_t tmp = ReadSymbolFromTarget(target, start, size, err);
     res = static_cast<int64_t>(tmp);
   } else if (size == 2) {
-    int16_t tmp = process.ReadUnsignedFromMemory(addr, size, sberr);
+    int16_t tmp = ReadSymbolFromTarget(target, start, size, err);
     res = static_cast<int64_t>(tmp);
   } else if (size == 1) {
-    int8_t tmp = process.ReadUnsignedFromMemory(addr, size, sberr);
+    int8_t tmp = ReadSymbolFromTarget(target, start, size, err);
     res = static_cast<int64_t>(tmp);
   } else {
     err = Error::Failure("Unexpected symbol size %" PRIu32 " of symbol %s",
                          size, name);
     return res;
   }
-
-  if (sberr.Fail())
-    err = Error::Failure("Failed to load symbol %s", name);
-  else
-    err = Error::Ok();
-
+  Error::PrintInDebugMode("Loaded constant %s = %" PRId64, name, res);
   return res;
 }
 
