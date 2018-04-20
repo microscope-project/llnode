@@ -95,7 +95,7 @@
           [ "lldb_lib_so != ''", {
             "libraries": ["<(lldb_lib_so)"]
           }, {
-            "libraries": ["<(lldb_lib)"]
+            "libraries": ["-l<(lldb_lib)"]
           }]
         ]
       }]
